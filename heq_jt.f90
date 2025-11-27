@@ -1,4 +1,4 @@
-parameter(jmax=10000)
+parameter(jmax=8000)
 implicit real*8 (a-h,o-z)
 real*8, dimension(jmax) :: r(jmax),rr(jmax),vol(jmax),mnfw(jmax), rhost(jmax),rho(jmax),checkrho(jmax),mhern(jmax),rhonfw(jmax),mdark(jmax),mdarkkkk(jmax),grvnfw(jmax),lnd(jmax),mgas(jmax),mgasstar(jmax),mtot(jmax),fb(jmax),rhostar(jmax)
 real*8 :: msol,mu,mp,rmin,rmax,mvir,rvir,mbgc,ahern,b
@@ -6,7 +6,7 @@ real*8 :: msol,mu,mp,rmin,rmax,mvir,rvir,mbgc,ahern,b
 real*8, dimension(jmax) :: T(jmax), xx(jmax)
 real*8 :: r500, Tmg, T_tmp
 !! part II - ZFe
-real*8, dimension(jmax) :: rhoFe(jmax), rhoFedot(jmax),rhoFe_obs(jmax), ZFe(jmax), ZFe_obs(jmax), ZFe_st(jmax),mFe_iniz(jmax), mFe_obs(jmax), flux(jmax), D(jmax), gradZFe(jmax), mFe(jmax)
+real*8, dimension(jmax) :: rhoFe(jmax), rhoFedot(jmax),rhoFe_obs(jmax), ZFe(jmax), ZFe_obs(jmax), ZFe_st(jmax),mFe_iniz(jmax), mFe_obs(jmax), flux(jmax), D(jmax), gradZFe(jmax), mFe(jmax), aaa(jmax)
 real*8 :: ZFe_out, ZFe_sol, time, tnow, t0, fac_year, vt, lt, rhojp1, rhoj, t_targer, tar, alpha_SNIa, alpha_st,ZFe_SNIa, slope, SNu
 
 !!! ---------- constants ----------------
@@ -103,7 +103,7 @@ enddo
 ! rho0=2.882d-26 ! (old)rho0, central density of gas, must be cahnged!!!
 ! rho0 = 4.0e-26 ! only isothermal gas 
 ! rho0=9.d-26   ! with BCG !!
-rho0=1.7d-25   ! with BCG and dT/dr !! 1.6d-25 get fb = 0.15
+rho0=1.6d-25   ! with BCG and dT/dr !! 1.6d-25 get fb = 0.15
 
 Ticm=8.9e7 ! isothermal gas temperature in K
 
@@ -115,7 +115,7 @@ lnd(1)=log(rho0)          ! I.C. using rho0 at the center -- rhog(0) = rho0
 !    lnd(j)=lnd(j-1)-gg*(mu*mp)*(rr(j)-rr(j-1))/(boltz*Ticm) ! ln rho_j+1/2
 ! enddo
 
-!! non-isothermal gas with dT/dr
+!!! non-isothermal gas with dT/dr
 do j=2,jmax
    gg=grvnfw(j) ! GM/rr2 at rr(j)
    lnd(j)=lnd(j-1)-gg*(mu*mp)*(rr(j)-rr(j-1))/(boltz*T(j)) - (log(T(j)) - log(T(j-1)))  ! ln rho_j+1/2
@@ -159,14 +159,14 @@ enddo
 !    write(20,1005)r(j)/cmkpc,mgas(j)/msol,mgasstar(j)/msol,mtot(j)/msol,fb(j) ! mass profile
 ! enddo
 ! close(20)   
-! 1005 format(5(1pe12.4))
+
 
 ! open(20,file='gasmass_BCG.dat',status='unknown')
 ! do j=1,jmax
 !    write(20,1005)r(j)/cmkpc,mgas(j)/msol,mgasstar(j)/msol,mtot(j)/msol,fb(j) ! mass profile
 ! enddo
 ! close(20)   
-! 1005 format(5(1pe12.4))
+
 
 open(20,file='gasmass_BCG_gradT.dat',status='unknown')
 do j=1,jmax
@@ -187,9 +187,7 @@ close(20)
 ! enddo
 ! close(20)
 
-
-!!! ---------- Addendum ----------------
-
+! goto 1001 !!! goto end, skip the part II 
 
 !!! ----------- part II - ZFe ----------------
 !!! start by setting the initial condition fot ZFe and rhoFe.
@@ -207,7 +205,7 @@ do j=1,jmax
    ZFe_obs(j)=ZFe_sol*0.3*1.4*(2.2+x**3)/(1+x**3)  !Perseus profile!
    ZFe_obs(j)=ZFe_obs(j) - ZFe_out   ! subtract ZFe_out, since the background is constant
    ZFe_obs(j)=max(ZFe_obs(j),0.d0) ! set mininum abundance to zero
-   ! ZFe(j)=ZFe_obs(j)!!zfeout !!zfeobs(j)  ! select initial ZFe, or do not use this line
+   ! ZFe(j)=ZFe_obs(j)! use this to calculate rhoFe only diffusion
    rhoFe(j)=rho(j)*ZFe(j)/1.4
    rhoFe_obs(j)=rho(j)*ZFe_obs(j)/1.4
 enddo
@@ -251,6 +249,7 @@ t_target = t0 + tar*1.e9*fac_year
 vt = 260.e5 ! Perseus cluster
 lt = 15.*cmkpc ! uncertainty?  Poor theory and observations????
 D = 0.11 * vt * lt ! for all D(j) 
+! D = 2.4e29 ! for special case
 
 
 ! calculate the timestep
@@ -260,8 +259,8 @@ dt = 0.4 * (r(5)-r(4))**2 / (2*D(5)) ! stability condition for diffusion equatio
 
 n = 0 
 
-! output diffusion at t = t0 (initial) before main loop
-! set the boundary conditions (outflows)
+! ! output diffusion at t = t0 (initial) before main loop
+! ! set the boundary conditions (outflows)
 ! ZFe(1)=ZFe(2)
 ! ZFe(jmax)=Zfe(jmax-1)
 ! ! rhoFe(1)=rhoFe(2)
@@ -281,9 +280,12 @@ do while (time .lt. tend)
    slope = 1.1
    ZFe_SNIa = 0.74/1.4  ! iron yield per SNIa in solar units
    ! alpha with time dependence
-   SNu = 0.15
+   SNu =0.7
    alpha_SNIa = 5.92e-21 * SNu* (time/tnow)**(-slope) ! this is the simplified result for alpha_SNIa
-   alpha_st = 4.7e-20 * (time/tnow)**(-1.26)
+   alpha_st = 4.7e-20 !* (time/tnow)**(-1.26)
+   ! add SNu but it do not vary with time
+   alpha_SNIa_notime = 5.92e-21 * SNu
+   alpha_st_notime = 4.7e-20
    ! use constant alpha and multiply iron abundance
    const_SNIa = 4.7e-22
    const_st = 6.e-23
@@ -301,6 +303,11 @@ do while (time .lt. tend)
    ! ! calculate rhoFe dot with time dependence
    ! do j=2, jmax-2
    !    rhoFedot(j) = rhostar(j) * (alpha_st * ZFe_st(j) / 1.4 + alpha_SNIa * ZFe_SNIa) 
+   ! enddo
+
+   ! ! calculate rhoFe dot with SNu without time dependence
+   ! do j=2, jmax-2
+   !    rhoFedot(j) = rhostar(j) * (alpha_st_notime * ZFe_st(j) / 1.4 + alpha_SNIa_notime * ZFe_SNIa) 
    ! enddo
 
    ! calculate the rhoFe
@@ -323,7 +330,7 @@ do while (time .lt. tend)
    !    enddo
    !    close(20)
    !    print*, 'Output Fe abundance at target time with only source term'
-   ! calculate Fe mass
+   ! ! calculate Fe mass
    !    mFe(1) = rhoFe(1)*vol(1)
    !    do j=2,jmax
    !       mFe(j) = mFe(j-1) + rhoFe(j-1)*vol(j)
@@ -354,18 +361,18 @@ do while (time .lt. tend)
    rhoFe(1)=rhoFe(2)
    rhoFe(jmax)=rhoFe(jmax-1)
 
-      ! output diffusion in target time
-      ! if (abs(time - t_target) .lt. dt/2.) then
-      !    open(20,file='diffusion2.dat',status='unknown')
-      !    do j=1,jmax
-      !       write(20,1002)rr(j)/cmkpc,ZFe(j)/ZFe_sol
-      !    enddo
-      !    close(20)
-      !    print*, 'Output Fe abundance at target time with only diffusion term'
-      !    mFe(1) = rhoFe(1)*vol(1)
-      !    do j=2,jmax
-      !       mFe(j) = mFe(j-1) + rhoFe(j-1)*vol(j)
-      !    enddo
+   ! ! output diffusion in target time
+   ! if (abs(time - t_target) .lt. dt/2.) then
+   !    open(20,file='diffusion5.dat',status='unknown')
+   !    do j=1,jmax
+   !       write(20,1002)rr(j)/cmkpc,ZFe(j)/ZFe_sol
+   !    enddo
+   !    close(20)
+   !    print*, 'Output Fe abundance at target time with only diffusion term'
+   !    mFe(1) = rhoFe(1)*vol(1)
+   !    do j=2,jmax
+   !       mFe(j) = mFe(j-1) + rhoFe(j-1)*vol(j)
+   !    enddo
    ! endif
 
    ! -------------------------------------------------------------
@@ -383,13 +390,65 @@ do while (time .lt. tend)
       do j=2,jmax
          mFe(j) = mFe(j-1) + rhoFe(j-1)*vol(j)
       enddo
+
+      ! ---- find index where r ≈ 100 kpc ----
+      r100 = 100.d0 * cmkpc
+      j100 = 1
+      do j = 1, jmax
+         if (r(j) .ge. r100) then
+            j100 = j
+            exit
+         endif
+      enddo
+      MFe_total = mFe(jmax)
+      MFe_100kpc = mFe(j100)
+      ! ---- find index of the peak and its r ----
+      Zpeak = ZFe(1)/2
+      jpeak = 1
+      do j = 1, jmax
+         if (ZFe(j) .le. Zpeak) then
+            jpeak = j
+            exit
+         endif
+      enddo
+      MFe_peak = mFe(jpeak)
+
+
+
+      ! ---- output total metal mass and metal mass within 100 kpc ----
+      open(30, file='Femass_d+s5.dat', status='unknown')
+      write(30,*) 'Total metal mass (Msun) = ', MFe_total/msol
+      write(30,*) 'Metal mass inside 100 kpc (Msun) = ', MFe_100kpc/msol
+      write(30,*) '100 kpc index j = ', j100
+      write(30,*) 'radius(j100)/kpc = ', r(j100)/cmkpc
+      write(30,*) 'Metal mass inside peak (Msun) = ', MFe_peak/msol
+      write(30,*) '100 kpc index j = ', jpeak
+      write(30,*) 'radius(j100)/kpc = ', r(jpeak)/cmkpc
+      close(30)
    endif
+
+
+   ! !output diffusion + source(parameters) in target time
+   ! if (abs(time - t_target) .lt. dt/2.) then
+   !    ! transport tar into string
+ 
+   !    open(20,file='SNu250_d+s5.dat',status='unknown')
+   !    do j=1,jmax
+   !       write(20,1002)rr(j)/cmkpc,ZFe(j)/ZFe_sol
+   !    enddo
+   !    close(20)
+   !    print*, 'Output Fe abundance at target time with diffusion + source (real situation)'
+   !    mFe(1) = rhoFe(1)*vol(1)
+   !    do j=2,jmax
+   !       mFe(j) = mFe(j-1) + rhoFe(j-1)*vol(j)
+   !    enddo
+   ! endif
 
    ! !!! ----------output diffusion + source(t) in target time ----------------
    ! if (abs(time - t_target) .lt. dt/2.) then
    !    ! transport tar into string
  
-   !    open(20,file='t_d+s5.dat',status='unknown')
+   !    open(20,file='t_d+s8.dat',status='unknown')
    !    do j=1,jmax
    !       write(20,1002)rr(j)/cmkpc,ZFe(j)/ZFe_sol
    !    enddo
@@ -407,7 +466,8 @@ enddo
 
 print*, 'The theoretical Fe mass at the target time is ', 5.3e-22*1e12*(t_target-t0), ' Msol'
 print*, 'The numerical Fe mass at the target time is ', mFe(jmax)/msol, ' Msol'
-
+print*, 'The numerical Fe mass at 100 kpc at the target time is ', mFe(j100)/msol, ' Msol'
+print*, 'The numerical Fe mass at the peak radius at the target time is ', mFe(jpeak)/msol, ' Msol'
 
 
 1001  continue
